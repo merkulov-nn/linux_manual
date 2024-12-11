@@ -1,0 +1,145 @@
+настроить работу apache на порты отличные от порта 80
+настройть работу nginx на порт 80
+настроить upstrean в nginx для BackEnd apache
+настроить перенаправление обращения nginx на upstream.
+настроен upstream в nginx на 3 разных порта apache
+в nginx для сайта на порту 80 прописан proxy_pass на upstream
+
+Давайте разберем каждый шаг подробно.
+Шаг 1: Настройка Apache на разные порты
+
+    Изменение порта Apache: откройте файл конфигурации Apache:
+
+sudo nano /etc/apache2/ports.conf
+
+Найдите строку Listen 80 и замените её на нужные вам порты, например:
+
+Listen 8080
+Listen 8081
+Listen 8082
+
+Теперь откройте виртуальные хосты Apache (например, /etc/apache2/sites-enabled/000-default.conf), найдите строки с указанием порта и также измените их на новые порты:
+
+<VirtualHost *:8080>
+    ServerAdmin webmaster@localhost
+    DocumentRoot /var/www/html/site1
+    ErrorLog ${APACHE_LOG_DIR}/site1-error.log
+    CustomLog ${APACHE_LOG_DIR}/site1-access.log combined
+</VirtualHost>
+
+<VirtualHost *:8081>
+    ServerAdmin webmaster@localhost
+    DocumentRoot /var/www/html/site2
+    ErrorLog ${APACHE_LOG_DIR}/site2-error.log
+    CustomLog ${APACHE_LOG_DIR}/site2-access.log combined
+</VirtualHost>
+
+<VirtualHost *:8082>
+    ServerAdmin webmaster@localhost
+    DocumentRoot /var/www/html/site3
+    ErrorLog ${APACHE_LOG_DIR}/site3-error.log
+    CustomLog ${APACHE_LOG_DIR}/site3-access.log combined
+</VirtualHost>
+
+Сохраните изменения и перезапустите Apache:
+
+sudo systemctl restart apache2
+
+Шаг 2: Настройка Nginx на порт 80
+
+    Настройка Nginx: откройте файл конфигурации Nginx:
+
+sudo nano /etc/nginx/sites-enabled/default
+
+Добавьте или измените директивы в файле конфигурации, чтобы настроить сервер на прослушивание порта 80 и использовать Upstream:
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server ipv6only=on;
+    
+    # Указываем имя сервера
+    server_name example.com www.example.com;
+    
+    location / {
+        proxy_pass http://backend_apache;
+        include proxy_params;
+    }
+}
+
+Шаг 3: Создание Upstream для Apache
+
+    Откройте основной конфигурационный файл Nginx:
+
+sudo nano /etc/nginx/nginx.conf
+
+В блоке http { ... } добавьте следующее определение Upstream:
+
+http {
+    ...
+    upstream backend_apache {
+        server 127.0.0.1:8080 weight=1; # Первый Apache-сервер
+        server 127.0.0.1:8081 weight=1; # Второй Apache-сервер
+        server 127.0.0.1:8082 weight=1; # Третий Apache-сервер
+    }
+    ...
+}
+
+Параметр weight позволяет задать вес каждого сервера при балансировке нагрузки. По умолчанию все сервера имеют одинаковый вес.
+Шаг 4: Перенаправление запросов через Upstream
+
+Убедитесь, что запросы, поступающие на Nginx, будут перенаправляться на ваш Apache-сервер через созданный Upstream.
+
+    Вернитесь к вашему сайту в /etc/nginx/sites-enabled/default, где уже настроен location /.
+    Убедитесь, что там используется правильное перенаправление:
+
+location / {
+    proxy_pass http://backend_apache;
+    include proxy_params;
+}
+
+Шаг 5: Проверка и перезапуск Nginx
+
+После внесения всех изменений проверьте синтаксис конфигурации Nginx:
+
+sudo nginx -t
+
+Если ошибок нет, перезапустите Nginx:
+
+sudo systemctl restart nginx
+
+Теперь ваши запросы должны перенаправляться от Nginx к одному из трех Apache-серверов через Upstream.
+
+ и как после этого проверить работу  nginx
+
+Отлично! После того как вы настроили Apache на разные порты, настроили Nginx на порт 80 и создали Upstream для Apache, осталось проверить работоспособность всей системы. Вот как это сделать:
+Шаг 6: Проверка работы Nginx
+
+    Проверка доступности сайтов через браузер:
+        Откройте браузер и введите URL вашего сайта (например, example.com). Вы должны увидеть контент, который обслуживается одним из ваших Apache-серверов.
+    Просмотр логов Nginx и Apache:
+        Проверьте лог-файлы Nginx:
+
+tail -f /var/log/nginx/error.log
+tail -f /var/log/nginx/access.log
+
+Проверьте лог-файлы Apache:
+
+tail -f /var/log/apache2/{site1,site2,site3}-error.log
+tail -f /var/log/apache2/{site1,site2,site3}-access.log
+
+Использование утилиты curl:
+
+    Выполните команду curl для проверки ответа от вашего сайта:
+
+curl -I http://example.com
+
+    Это покажет заголовки HTTP-ответа, включая код статуса (например, 200 OK).
+    Тестирование балансировки нагрузки:
+        Повторяйте запрос к вашему сайту несколько раз подряд, проверяя логи Apache. Вы должны видеть, что запросы распределяются между всеми тремя серверами.
+    Мониторинг производительности:
+        Используйте инструменты мониторинга, такие как htop, top или netstat, чтобы следить за нагрузкой на серверы и сетевой активностью.
+
+Заключение
+
+Таким образом, вы успешно настроили работу Apache на разных портах, настроили Nginx на порт 80 и организовали балансировку нагрузки через Upstream. Проверив доступность сайта через браузер, просмотрев логи и выполнив команды curl, вы убедитесь, что всё работает корректно.
+
